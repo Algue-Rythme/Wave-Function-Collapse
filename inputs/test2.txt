@@ -1,0 +1,11 @@
+9 5
+aaaaa
+bbbbb
+ccccc
+ddddd
+eeeee
+ddddd
+ccccc
+bbbbb
+aaaaa
+20 20
