@@ -21,8 +21,8 @@ target_link_libraries(wavefunctioncollapse ${SFML_LIBRARIES})
 
 if(CMAKE_COMPILER_IS_GNUCXX)
         add_definitions(-std=c++17 -Wall -pedantic-errors)
-        add_definitions(-O2 -s -DNDEBUG)
-        # add_definitions(-g -DEBUG)
+        # add_definitions(-O2 -s -DNDEBUG)
+        add_definitions(-g -DEBUG)
         add_definitions(${GCC_COVERAGE_LINK_FLAGS}$)
 endif()
 

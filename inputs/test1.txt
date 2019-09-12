@@ -4,4 +4,3 @@ aabaa
 aabaa
 ccbcc
 ccbcc
-5 5
