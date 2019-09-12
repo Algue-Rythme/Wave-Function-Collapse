@@ -15,9 +15,8 @@ include_directories(${Boost_INCLUDE_DIR})
 link_directories(${Boost_LIBRARY_DIRS})
 target_link_libraries(wavefunctioncollapse ${Boost_LIBRARIES})
 
-include_directories(${SFML_INCLUDE_DIR})
-link_directories($(SFML_LIBRARY_DIRS))
-target_link_libraries(wavefunctioncollapse ${SFML_LIBRARIES})
+find_package(SFML 2.4 COMPONENTS graphics audio REQUIRED)
+target_link_libraries(wavefunctioncollapse sfml-graphics)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
         add_definitions(-std=c++17 -Wall -pedantic-errors)

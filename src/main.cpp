@@ -15,7 +15,7 @@
 using namespace std;
 
 typedef boost::dynamic_bitset<> OneHotTiles;
-typedef int TileID;
+typedef uint TileID;
 typedef vector<double> Histogram;
 
 struct TileState {
@@ -195,15 +195,22 @@ wave_function_collapse(
 
 // -----------------------------------------------------------------------------
 
-void print_ascii(
-    TileMap<TileID> const& generated,
-    WFCImage example) {
-    generated.for_each([&](int i, int j, TileID tile) {
-        cout << example.tiles[tile];
-        if (j+1 == generated.m()) {
-            cout << "\n";
+void export_img(std::string const& path,
+                TileMap<TileID>& generated,
+                WFCImage& original)
+{
+    sf::Image output_image;
+    uint ts = original.tile_size();
+    uint n = generated.n();
+    uint m = generated.m();
+    output_image.create(n*ts, m*ts);
+    for (uint i = 0 ; i < n; i++){
+        for (uint j = 0 ; j < m ; j++){
+            int ind = generated(i,j);
+            output_image.copy(original.tiles[ind], i*ts, j*ts);
         }
-    });
+    }
+    output_image.saveToFile(path);
 }
 
 // -----------------------------------------------------------------------------
@@ -223,9 +230,9 @@ int main(int argc, char* argv[]) {
         }
 
         WFCImage example;
-        example.read_from_txt(input_file);
+        example.read_from_file(input_file);
         auto generated = wave_function_collapse(example, n, m);
-        print_ascii(generated, example);
+        export_img("output.png", generated, example);
     }
 
 

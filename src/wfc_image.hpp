@@ -5,42 +5,61 @@
 #include <vector>
 #include <algorithm>
 #include <fstream>
-#include <iostream>
+#include <iostream> // DEBUG
 
 #include <SFML/Graphics.hpp>
 
 #include "tile_map.hpp"
 
-typedef int TileID;
-typedef char Tile;
+typedef uint TileID;
+typedef sf::Image Tile;
+
+bool equal(Tile const& a, Tile const& b){
+    sf::Vector2u size_a = a.getSize();
+    sf::Vector2u size_b = b.getSize();
+    if (size_a.x != size_b.x || size_a.y != size_b.y) return false;
+    for (uint i = 0 ; i < size_a.x ; i++) {
+        for (uint j = 0 ; j < size_a.y ; j++) {
+            if (a.getPixel(i,j) != b.getPixel(i,j)) return false;
+        }
+    }
+    return true;
+}
 
 class WFCImage {
 
 public:
     WFCImage() = default;
 
-    void read_from_txt(std::string const& path) {
+    void read_from_file(std::string const& path, uint ts = 1u) {
         if (_loaded) return;
 
-        std::ifstream stream;
-        stream.open(path);
+        if (not img.loadFromFile(path)){
+            std::cerr << "Image " << path << " could not be loaded" << std::endl;
+        }
 
-        int n,m;
-        stream >> n >> m;
-        tileMap = TileMap<TileID>(n, m);
+        _tile_size = ts;
+        sf::Vector2u size = img.getSize();
+        size_x = size.x/ts;
+        size_y = size.y/ts;
+        tileMap = TileMap<TileID>(size_x, size_y);
 
-        for (int i = 0; i < n; ++i) {
-            for (int j = 0; j < m; ++j) {
-                char c;
-                stream >> c;
-                for (uint find = 0 ; find <= tiles.size() ; find++){
-                    if (find == tiles.size()){
-                        tiles.push_back(c);
-                        tileMap(i, j) = TILE_ID;
+        for (uint x = 0 ; x < size_x ; x++) {
+            for (uint y = 0 ; y < size_y ; y++) {
+                Tile tile_xy;
+                tile_xy.create(ts, ts);
+                tile_xy.copy(img, 0, 0,
+                    sf::IntRect(x*ts, y*ts,
+                                ts, ts));
+                for (uint find = 0 ; find <= tiles.size() ; find++) {
+                    if (find == tiles.size()) {
+                        tiles.push_back(tile_xy);
+                        tileMap(x, y) = TILE_ID;
                         TILE_ID++;
                         break;
-                    } else if (tiles[find] == c){
-                        tileMap(i, j) = find;
+                    }
+                    if (equal(tiles[find], tile_xy)) {
+                        tileMap(x, y) = find;
                         break;
                     }
                 }
@@ -50,20 +69,12 @@ public:
         _loaded = true;
     }
 
-    /*
-    void read_from_img(std::string const& path, uint _tile_size = 1u) {
-        if (_loaded) return;
-        sf::Image img;
-        if (not img.loadFromFile(path)){
-            std::cerr << "Image " << path << " could not be loaded" << std::endl;
-        }
-        create_histogram();
-        _loaded = true;
-    }
-    */
-
     uint nb_tiles() const {
         return tiles.size();
+    }
+
+    uint tile_size() const {
+        return _tile_size;
     }
 
     void create_histogram() {
@@ -90,11 +101,11 @@ public:
     TileMap<TileID> tileMap; // neighbourhood data
 
 private:
+    sf::Image img;
     bool _loaded = false;
     uint size_x;
     uint size_y;
-
-    //uint tile_size;
+    uint _tile_size;
 
     unsigned long TILE_ID = 0u;
 };
