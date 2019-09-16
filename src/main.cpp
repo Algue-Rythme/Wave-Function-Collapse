@@ -1,6 +1,7 @@
 #include <exception>
 #include <iostream>
 #include <cmath>
+#include <list>
 #include <random>
 #include <string>
 #include <vector>
@@ -15,7 +16,7 @@
 using namespace std;
 
 typedef boost::dynamic_bitset<> OneHotTiles;
-typedef uint TileID;
+typedef int TileID;
 typedef vector<double> Histogram;
 
 struct TileState {
@@ -77,6 +78,87 @@ private:
     TileMap<OneHotTiles> m_constraints;
 };
 
+class BadWaveCollapse: public exception {
+public:
+    const char * what () const throw () {
+        return "unsatisfied constraint encountered";
+    }
+};
+
+class ImpossibleWaveCollapse: public exception {
+public:
+    const char * what () const throw () {
+        return "impossible to fulfill the constraints. abort wave collapse.";
+    }
+};
+
+class HistoryStack {
+public:
+  HistoryStack() = default;
+
+  void save_state(
+    Index index,
+    TileID tileId,
+    TileMap<TileID> const& generated,
+    TileMap<OneHotTiles> const& wave,
+    TileStateLazyHeap const& heap) {
+      m_index.push_back(index);
+      m_tileId.push_back(tileId);
+      m_generated.push_back(generated);
+      m_wave.push_back(wave);
+      m_heap.push_back(heap);
+      if (m_index.size() > MEM_SIZE_LIM) {
+        remove_random_history();
+      }
+  }
+
+  void remove_random_history() {
+    uniform_int_distribution dist(1, int(m_index.size()) - MEM_SIZE_LIM);
+    int pos = dist(random_gen);
+    search_and_destroy(m_index, pos);
+    search_and_destroy(m_tileId, pos);
+    search_and_destroy(m_generated, pos);
+    search_and_destroy(m_wave, pos);
+    search_and_destroy(m_heap, pos);
+  }
+
+  Index restore_and_backtrack(
+    TileMap<TileID>& generated,
+    TileMap<OneHotTiles>& wave,
+    TileStateLazyHeap& heap) {
+    if (m_index.empty())
+      throw ImpossibleWaveCollapse();
+    Index index = m_index.back();
+    TileID tileId = m_tileId.back();
+    generated = m_generated.back();
+    wave = m_wave.back();
+    heap = m_heap.back();
+    m_index.pop_back();
+    m_tileId.pop_back();
+    m_generated.pop_back();
+    m_wave.pop_back();
+    m_heap.pop_back();
+    generated(index) = NO_TILE;
+    wave(index).set(tileId, false);
+    return index;
+  }
+
+private:
+  template<typename T>
+  void search_and_destroy(list<T>& hist, int pos) {
+    auto it = begin(hist);
+    advance(it, pos);
+    hist.erase(it);
+  }
+
+  static const int MEM_SIZE_LIM = 1 << 8;
+  list<TileMap<TileID>> m_generated;
+  list<TileMap<OneHotTiles>> m_wave;
+  list<Index> m_index;
+  list<TileID> m_tileId;
+  list<TileStateLazyHeap> m_heap;
+};
+
 double entropy(Histogram const& histo, OneHotTiles const& onehot) {
     assert(histo.size() == tile.size());
     double h = 0.;
@@ -94,7 +176,7 @@ void propagate(
     ConstraintsHandler const& constraints,
     Histogram const& histo,
     unsigned long nb_max_tiles,
-    TileMap<TileID> generated,
+    TileMap<TileID> const& generated,
     TileMap<OneHotTiles>& wave,
     TileStateLazyHeap& heap,
     Index start
@@ -102,6 +184,8 @@ void propagate(
     Index step = start_right;
     OneHotTiles mask(nb_max_tiles, false);
     OneHotTiles available = wave(start);
+    if (available.none())
+        throw BadWaveCollapse();
     for (int dir = 0; dir < 4; ++dir) {
         auto index = compose(start, step);
         step = rot90(step);
@@ -123,16 +207,9 @@ void propagate(
     }
 }
 
-class BadWaveCollapse: public exception {
-public:
-    const char * what () const throw () {
-        return "unsatisfied constraint encountered";
-    }
-};
-
 TileID sample_tile(Histogram const& histo, OneHotTiles const& onehot) {
     if (onehot.none())
-        throw BadWaveCollapse();
+        throw ImpossibleWaveCollapse();
     Histogram filtered = histo;
     for (int i = 0; i < (int)histo.size(); ++i) {
         if (!onehot[i]) {
@@ -143,54 +220,50 @@ TileID sample_tile(Histogram const& histo, OneHotTiles const& onehot) {
     return dist(random_gen);
 }
 
-void wave_function_collapse_attempt(
-    WFCImage const& example,
-    TileMap<TileID>& generated
-) {
-    ConstraintsHandler constraints(example.tileMap, example.nb_tiles());
-    const auto histo = example.histogram;
-    const auto all_tiles_ok = OneHotTiles{example.nb_tiles()}.set();
-    TileMap<OneHotTiles> wave(generated.n(), generated.m(), all_tiles_ok);
+TileMap<TileID> wave_function_collapse(WFCImage const& example, int n, int m) {
+  ConstraintsHandler constraints(example.tileMap, example.nb_tiles());
+  const auto histo = example.histogram;
+  const auto all_tiles_ok = OneHotTiles{example.nb_tiles()}.set();
+  TileMap<TileID> generated(n, m, NO_TILE);
+  TileMap<OneHotTiles> wave(generated.n(), generated.m(), all_tiles_ok);
 
-    TileStateLazyHeap heap;
-    wave.for_each([&heap,&histo](int i, int j, OneHotTiles const& onehot){
-        double h = entropy(histo, onehot);
-        TileState state(Index(i, j), h);
-        heap.update_key(state);
-    });
+  TileStateLazyHeap heap;
+  wave.for_each([&heap,&histo](int i, int j, OneHotTiles const& onehot){
+      double h = entropy(histo, onehot);
+      TileState state(Index(i, j), h);
+      heap.update_key(state);
+  });
 
-    // (wave.n(), wave.m(), NO_TILE);
-    while (!heap.empty()) {
-        Index index = heap.top().index;
-        heap.pop();
-        auto const& onehot = wave(index);
-        TileID tile = sample_tile(histo, onehot);
-        wave(index) = OneHotTiles{example.nb_tiles()}.set(tile);
-        generated(index) = tile;
-        propagate(constraints, histo, example.nb_tiles(), generated, wave, heap, index);
-    }
-}
+  HistoryStack bt;
+  int attempt = 1;
+  int depth = 0;
+  while (!heap.empty()) {
+    Index index = heap.top().index;
+    heap.pop();
+    auto const& onehot = wave(index);
+    TileID tile = sample_tile(histo, onehot);
 
-TileMap<TileID>
-wave_function_collapse(
-    WFCImage example,
-    int n, int m) {
+    bt.save_state(index, tile, generated, wave, heap);
 
-    int attempt = 1;
+    wave(index) = OneHotTiles{example.nb_tiles()}.set(tile);
+    generated(index) = tile;
+    depth += 1;
+
+    Index last_index = index;
     while (true) {
-        cout << "Attempt " << attempt << "... ";
-        try {
-            TileMap<TileID> generated(n, m, NO_TILE);
-            wave_function_collapse_attempt(example, generated);
-            cout << "success!\n";
-            return generated;
-        } catch (BadWaveCollapse const& e) {
-            cout << e.what() << "\n";
-            attempt += 1;
-        }
-
-        if (attempt>10) break;
+      try {
+        propagate(constraints, histo, example.nb_tiles(), generated, wave, heap, index);
+        break;
+      } catch(BadWaveCollapse const& e) {
+        cout << "Attempt " << attempt << ": " << e.what() << " at depth " << depth << "\n";
+        last_index = bt.restore_and_backtrack(generated, wave, heap);
+        attempt += 1;
+        depth -= 1;
+      }
     }
+  }
+
+  return generated;
 }
 
 // -----------------------------------------------------------------------------
@@ -216,25 +289,25 @@ void export_img(std::string const& path,
 // -----------------------------------------------------------------------------
 
 int main(int argc, char* argv[]) {
-
-    if (argc>1){
-        std::string input_file = argv[1];
-
-        int n,m;
-        if (argc>3){
-            n = atoi(argv[2]);
-            m = atoi(argv[3]);
-        } else {
-            n = 30;
-            m = 30;
-        }
-
-        WFCImage example;
-        example.read_from_file(input_file);
-        auto generated = wave_function_collapse(example, n, m);
-        export_img("output.png", generated, example);
+  try {
+    if (argc>1) {
+      std::string input_file = argv[1];
+      int n,m;
+      if (argc>3){
+        n = atoi(argv[2]);
+        m = atoi(argv[3]);
+      } else {
+        n = 30;
+        m = 30;
+      }
+      WFCImage example;
+      example.read_from_file(input_file, 2);
+      auto generated = wave_function_collapse(example, n, m);
+      export_img("output.png", generated, example);
     }
+  } catch (exception const& e) {
+    cout << "Error: " << e.what() << "\n";
+  }
 
-
-    return 0;
+  return 0;
 }

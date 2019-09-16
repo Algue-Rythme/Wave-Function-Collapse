@@ -15,6 +15,7 @@ include_directories(${Boost_INCLUDE_DIR})
 link_directories(${Boost_LIBRARY_DIRS})
 target_link_libraries(wavefunctioncollapse ${Boost_LIBRARIES})
 
+list(APPEND CMAKE_MODULE_PATH "/usr/share/SFML/cmake/Modules")
 find_package(SFML 2.4 COMPONENTS graphics audio REQUIRED)
 target_link_libraries(wavefunctioncollapse sfml-graphics)
 
@@ -27,4 +28,3 @@ endif()
 
 set(CMAKE_BUILD_TYPE Release)
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
-#set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake_modules" ${CMAKE_MODULE_PATH})

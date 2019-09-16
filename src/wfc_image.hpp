@@ -11,15 +11,15 @@
 
 #include "tile_map.hpp"
 
-typedef uint TileID;
+typedef int TileID;
 typedef sf::Image Tile;
 
 bool equal(Tile const& a, Tile const& b){
     sf::Vector2u size_a = a.getSize();
     sf::Vector2u size_b = b.getSize();
     if (size_a.x != size_b.x || size_a.y != size_b.y) return false;
-    for (uint i = 0 ; i < size_a.x ; i++) {
-        for (uint j = 0 ; j < size_a.y ; j++) {
+    for (int i = 0 ; i < (int)size_a.x ; i++) {
+        for (int j = 0 ; j < (int)size_a.y ; j++) {
             if (a.getPixel(i,j) != b.getPixel(i,j)) return false;
         }
     }
@@ -31,7 +31,7 @@ class WFCImage {
 public:
     WFCImage() = default;
 
-    void read_from_file(std::string const& path, uint ts = 1u) {
+    void read_from_file(std::string const& path, int ts = 1) {
         if (_loaded) return;
 
         if (not img.loadFromFile(path)){
@@ -44,15 +44,15 @@ public:
         size_y = size.y/ts;
         tileMap = TileMap<TileID>(size_x, size_y);
 
-        for (uint x = 0 ; x < size_x ; x++) {
-            for (uint y = 0 ; y < size_y ; y++) {
+        for (int x = 0 ; x < (int)size_x ; x++) {
+            for (int y = 0 ; y < (int)size_y ; y++) {
                 Tile tile_xy;
                 tile_xy.create(ts, ts);
                 tile_xy.copy(img, 0, 0,
                     sf::IntRect(x*ts, y*ts,
                                 ts, ts));
-                for (uint find = 0 ; find <= tiles.size() ; find++) {
-                    if (find == tiles.size()) {
+                for (int find = 0 ; find <= (int)tiles.size() ; find++) {
+                    if (find == (int)tiles.size()) {
                         tiles.push_back(tile_xy);
                         tileMap(x, y) = TILE_ID;
                         TILE_ID++;
@@ -73,7 +73,7 @@ public:
         return tiles.size();
     }
 
-    uint tile_size() const {
+    int tile_size() const {
         return _tile_size;
     }
 
@@ -103,9 +103,9 @@ public:
 private:
     sf::Image img;
     bool _loaded = false;
-    uint size_x;
-    uint size_y;
-    uint _tile_size;
+    int size_x;
+    int size_y;
+    int _tile_size;
 
-    unsigned long TILE_ID = 0u;
+    long TILE_ID = 0u;
 };
