@@ -19,6 +19,10 @@ typedef boost::dynamic_bitset<> OneHotTiles;
 typedef int TileID;
 typedef vector<double> Histogram;
 
+const double SAVE_FREQUENCY = 0.3;
+const int MEM_SIZE_LIM_MUL = 10;
+const double MAX_HEAP_OVERLOAD = 10.;
+
 struct TileState {
     TileState(Index const _index, double _entropy):
     index(_index), entropy(_entropy) {}
@@ -96,7 +100,7 @@ class HistoryStack {
 public:
   HistoryStack(int n, int m, int num_tiles) {
     int tot = max(n * m, n * m * num_tiles / 8);
-    int ratio =  int(sqrt(tot)) / 10;
+    int ratio =  int(sqrt(tot)) / MEM_SIZE_LIM_MUL;
     MEM_SIZE_LIM = max(10, ratio);
   }
 
@@ -240,13 +244,17 @@ TileMap<TileID> wave_function_collapse(WFCImage const& example, int n, int m) {
 
   HistoryStack bt(n, m, example.nb_tiles());
   int depth = 0;
+  uniform_real_distribution coin_tosser(0., 1.);
   while (!heap.empty()) {
     Index index = heap.top().index;
     heap.pop();
     auto const& onehot = wave(index);
     TileID tile = sample_tile(histo, onehot);
 
-    bt.save_state(index, tile, generated, wave, heap);
+    double coin = coin_tosser(random_gen);
+    if (coin < SAVE_FREQUENCY || depth == 0) {
+      bt.save_state(index, tile, generated, wave, heap);
+    }
 
     wave(index) = OneHotTiles{example.nb_tiles()}.set(tile);
     generated(index) = tile;
@@ -269,6 +277,10 @@ TileMap<TileID> wave_function_collapse(WFCImage const& example, int n, int m) {
         });
         cout << " back to " << depth << "\n";
       }
+    }
+
+    if (heap.overload_ratio() > MAX_HEAP_OVERLOAD) {
+      save_memory(heap);
     }
   }
 
@@ -310,13 +322,13 @@ int main(int argc, char* argv[]) {
         m = 30;
       }
       WFCImage example;
-      example.read_from_file(input_file, 2);
+      example.read_from_file(input_file, 16);
       auto generated = wave_function_collapse(example, n, m);
       export_img("output.png", generated, example);
       cout << "Success ! Image written at ./output.png\n";
     }
   } catch (exception const& e) {
-    cout << "Error: " << e.what() << "\n";
+    cout << "\nError: " << e.what() << "\n";
   }
 
   return 0;

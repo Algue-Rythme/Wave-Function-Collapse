@@ -55,6 +55,12 @@ public:
         return m_heap.empty();
     }
 
+    double overload_ratio() const {
+      if (m_last_update.empty())
+        return 1.;
+      return m_heap.size() / m_last_update.size();
+    }
+
 private:
     std::priority_queue<
         ExpirableKey,
@@ -77,5 +83,20 @@ private:
         }
     }
 };
+
+template<
+    typename T,
+    typename CompareHeap,
+    typename CompareHash
+    >
+void save_memory(LazyHeap<T, CompareHeap, CompareHash>& heap) {
+  LazyHeap<T, CompareHeap, CompareHash> other;
+  while (!heap.empty()) {
+    auto elem = heap.top();
+    heap.pop();
+    other.update_key(elem);
+  }
+  heap = other;
+}
 
 #endif
