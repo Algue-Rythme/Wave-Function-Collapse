@@ -94,7 +94,11 @@ public:
 
 class HistoryStack {
 public:
-  HistoryStack() = default;
+  HistoryStack(int n, int m, int num_tiles) {
+    int tot = max(n * m, n * m * num_tiles / 8);
+    int ratio =  int(sqrt(tot)) / 10;
+    MEM_SIZE_LIM = max(10, ratio);
+  }
 
   void save_state(
     Index index,
@@ -107,13 +111,13 @@ public:
       m_generated.push_back(generated);
       m_wave.push_back(wave);
       m_heap.push_back(heap);
-      if (m_index.size() > MEM_SIZE_LIM) {
+      if ((int)m_index.size() > MEM_SIZE_LIM) {
         remove_random_history();
       }
   }
 
   void remove_random_history() {
-    uniform_int_distribution dist(1, int(m_index.size()) - MEM_SIZE_LIM);
+    uniform_int_distribution dist(1, int(m_index.size()) - 1);
     int pos = dist(random_gen);
     search_and_destroy(m_index, pos);
     search_and_destroy(m_tileId, pos);
@@ -151,7 +155,7 @@ private:
     hist.erase(it);
   }
 
-  static const int MEM_SIZE_LIM = 1 << 8;
+  int MEM_SIZE_LIM;
   list<TileMap<TileID>> m_generated;
   list<TileMap<OneHotTiles>> m_wave;
   list<Index> m_index;
@@ -234,8 +238,7 @@ TileMap<TileID> wave_function_collapse(WFCImage const& example, int n, int m) {
       heap.update_key(state);
   });
 
-  HistoryStack bt;
-  int attempt = 1;
+  HistoryStack bt(n, m, example.nb_tiles());
   int depth = 0;
   while (!heap.empty()) {
     Index index = heap.top().index;
@@ -250,15 +253,21 @@ TileMap<TileID> wave_function_collapse(WFCImage const& example, int n, int m) {
     depth += 1;
 
     Index last_index = index;
+    int attempt = 1;
     while (true) {
       try {
         propagate(constraints, histo, example.nb_tiles(), generated, wave, heap, index);
-        break;
+        break ;
       } catch(BadWaveCollapse const& e) {
-        cout << "Attempt " << attempt << ": " << e.what() << " at depth " << depth << "\n";
+        cout << "Attempt " << attempt << ": " << e.what() << " at depth " << depth;
         last_index = bt.restore_and_backtrack(generated, wave, heap);
         attempt += 1;
-        depth -= 1;
+        depth = 0;
+        generated.for_each([&](int i, int j, TileID tile){
+          if (tile != NO_TILE)
+            depth += 1;
+        });
+        cout << " back to " << depth << "\n";
       }
     }
   }
@@ -304,6 +313,7 @@ int main(int argc, char* argv[]) {
       example.read_from_file(input_file, 2);
       auto generated = wave_function_collapse(example, n, m);
       export_img("output.png", generated, example);
+      cout << "Success ! Image written at ./output.png\n";
     }
   } catch (exception const& e) {
     cout << "Error: " << e.what() << "\n";
