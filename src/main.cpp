@@ -313,16 +313,16 @@ int main(int argc, char* argv[]) {
   try {
     if (argc>1) {
       std::string input_file = argv[1];
-      int n,m;
-      if (argc>3){
+      int n = 30;
+      int m = 30;
+      int ts = 1;
+      if (argc >= 5){
         n = atoi(argv[2]);
         m = atoi(argv[3]);
-      } else {
-        n = 30;
-        m = 30;
+        ts = atoi(argv[4]);
       }
       WFCImage example;
-      example.read_from_file(input_file, 16);
+      example.read_from_file(input_file, ts);
       auto generated = wave_function_collapse(example, n, m);
       export_img("output.png", generated, example);
       cout << "Success ! Image written at ./output.png\n";
