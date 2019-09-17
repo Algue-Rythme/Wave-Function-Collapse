@@ -264,7 +264,7 @@ TileMap<TileID> wave_function_collapse(WFCImage const& example, int n, int m) {
     int attempt = 1;
     while (true) {
       try {
-        propagate(constraints, histo, example.nb_tiles(), generated, wave, heap, index);
+        propagate(constraints, histo, example.nb_tiles(), generated, wave, heap, last_index);
         break ;
       } catch(BadWaveCollapse const& e) {
         cout << "Attempt " << attempt << ": " << e.what() << " at depth " << depth;
